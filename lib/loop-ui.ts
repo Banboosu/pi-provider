@@ -319,7 +319,7 @@ class WrapEditorComponent extends ExtensionEditorComponent {
 		this.wrapTui = tui;
 	}
 
-	handleInput(keyData: string): void {
+	override handleInput(keyData: string): void {
 		// Wrap-around cursor: ↑ on the first visual row jumps to the last row,
 		// ↓ on the last visual row jumps back to the first.
 		const ed = (this as unknown as { editor?: Editor }).editor;
