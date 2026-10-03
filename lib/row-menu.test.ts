@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { initTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
+import { HOST_ROWS } from "./fit.ts";
 import { type RowMenuChoice, RowMenu, type RowMenuOptions } from "./row-menu.ts";
 
 initTheme();
 const stubTheme = { fg: (_c: string, t: string) => t, bold: (t: string) => t } as unknown as Theme;
-const stubTui = { requestRender() {} } as unknown as TUI;
+const stubTui = { requestRender() {}, terminal: { rows: 40, columns: 100 } } as unknown as TUI;
 const UP = "\x1b[A";
 const DOWN = "\x1b[B";
 const ENTER = "\r";
@@ -100,5 +101,18 @@ describe("RowMenu", () => {
 		const { menu, chosen } = open({});
 		menu.handleInput("\x1b");
 		assert.deepEqual(chosen, [undefined]);
+	});
+});
+
+describe("RowMenu on a short terminal", () => {
+	it("leaves Pi its rows and keeps the cursor row on screen", () => {
+		const entries = Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, label: `model-${i}`, detail: "128k" }));
+		for (const rows of [20, 24, 30]) {
+			const tui = { requestRender() {}, terminal: { rows, columns: 100 } } as unknown as TUI;
+			const menu = new RowMenu(tui, stubTheme, { title: "Models", entries, initialId: "m25" }, () => {});
+			const lines = menu.render(100);
+			assert.ok(lines.length <= rows - HOST_ROWS, `${lines.length} lines on ${rows} rows`);
+			assert.ok(lines.some((line) => line.includes("model-25")));
+		}
 	});
 });

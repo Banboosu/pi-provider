@@ -1,6 +1,7 @@
 import type { ExtensionCommandContext, Theme } from "@earendil-works/pi-coding-agent";
 import { DynamicBorder, keyHint, rawKeyHint } from "@earendil-works/pi-coding-agent";
 import { Container, getKeybindings, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
+import { blockWindow, otherRows, spareRows } from "./fit.ts";
 
 /**
  * Live checklist panel for provider tests.
@@ -114,8 +115,15 @@ export class ChecksPanel extends Container {
 	private readonly checks: PanelCheck[];
 	private readonly finish: (outcome: ChecksPanelOutcome) => void;
 	private readonly concurrency: number;
+	/** Marks where the checks go among the children; render() draws them from `blocks`. */
 	private readonly listContainer = new Container();
 	private readonly statusText = new Text("", 1, 0);
+	/** Each check's lines: its row, then any sub lines and hint under it. */
+	private blocks: Text[][] = [];
+	/** First check drawn at the last render; a short terminal scrolls from here. */
+	private top = 0;
+	/** Keep the first failure in view until the user scrolls by hand. */
+	private follow = true;
 	private rows: Row[] = [];
 	private frame = 0;
 	private timer: ReturnType<typeof setInterval> | null = null;
@@ -175,6 +183,8 @@ export class ChecksPanel extends Container {
 		this.pending = this.queue.length;
 		this.active = 0;
 		this.cursor = -1;
+		this.top = 0;
+		this.follow = true;
 		this.pump(gen);
 
 		if (!this.finished && this.timer === null) {
@@ -287,19 +297,20 @@ export class ChecksPanel extends Container {
 	private refresh(): void {
 		const t = this.theme;
 		const picking = Boolean(this.options.pickLabel);
-		this.listContainer.clear();
+		this.blocks = [];
 		for (let i = 0; i < this.checks.length; i++) {
 			const check = this.checks[i]!;
 			const row = this.rows[i]!;
 			const prefix = picking ? (i === this.cursor ? t.fg("accent", "→ ") : "  ") : "";
-			this.listContainer.addChild(new Text(`${prefix}${this.renderRow(check, row)}`, 1, 0));
+			const block = [new Text(`${prefix}${this.renderRow(check, row)}`, 1, 0)];
 			const indent = picking ? "      " : "    ";
 			for (const sub of row.result?.sub ?? []) {
-				this.listContainer.addChild(new Text(t.fg("dim", `${indent}${sub}`), 1, 0));
+				block.push(new Text(t.fg("dim", `${indent}${sub}`), 1, 0));
 			}
 			if (row.result?.hint && row.status === "fail") {
-				this.listContainer.addChild(new Text(t.fg("warning", `${indent}↳ ${row.result.hint}`), 1, 0));
+				block.push(new Text(t.fg("warning", `${indent}↳ ${row.result.hint}`), 1, 0));
 			}
+			this.blocks.push(block);
 		}
 
 		if (this.finished) {
@@ -332,6 +343,52 @@ export class ChecksPanel extends Container {
 			this.statusText.setText(`${progress}${keyHint("tui.select.cancel", "cancel")}`);
 		}
 		this.tui.requestRender();
+	}
+
+	override render(width: number): string[] {
+		const t = this.theme;
+		const blocks = this.blocks.map((block) => block.flatMap((text) => text.render(width)));
+		const room = spareRows(this.tui.terminal.rows, otherRows(this.children, width, this.listContainer));
+		const { start, end } = blockWindow(
+			blocks.map((lines) => lines.length),
+			room,
+			this.top,
+			this.focusIndex() ?? this.top,
+		);
+		this.top = start;
+		const list = blocks.slice(start, end).flat();
+		if (start > 0 || end < blocks.length) {
+			const parts: string[] = [];
+			if (start > 0) parts.push(`${start} above`);
+			if (end < blocks.length) parts.push(`${blocks.length - end} below`);
+			if (this.finished && this.cursor < 0) parts.push("↑↓ scroll");
+			const indent = this.options.pickLabel ? "   " : " ";
+			list.push(t.fg("dim", `${indent}${parts.join(" · ")}`));
+		}
+		return this.children.flatMap((child) => (child === this.listContainer ? list : child.render(width)));
+	}
+
+	/**
+	 * The check a short terminal keeps in view: the first one still running,
+	 * then the picked row, then the first failure until the user scrolls away.
+	 * Undefined leaves the list where it is.
+	 */
+	private focusIndex(): number | undefined {
+		if (!this.finished) {
+			const running = this.rows.findIndex((row) => row.status === "running");
+			return running >= 0 ? running : undefined;
+		}
+		if (this.cursor >= 0) return this.cursor;
+		if (!this.follow) return undefined;
+		const failed = this.rows.findIndex((row) => row.status === "fail");
+		return failed >= 0 ? failed : undefined;
+	}
+
+	/** ↑↓ when there is no row to pick: move the list by one check. */
+	private scroll(direction: 1 | -1): void {
+		this.follow = false;
+		this.top = Math.max(0, this.top + direction);
+		this.refresh();
 	}
 
 	private renderRow(check: PanelCheck, row: Row): string {
@@ -368,11 +425,13 @@ export class ChecksPanel extends Container {
 		}
 		if (!this.finished) return;
 		if (kb.matches(keyData, "tui.select.up")) {
-			this.moveCursor(-1);
+			if (this.cursor >= 0) this.moveCursor(-1);
+			else this.scroll(-1);
 			return;
 		}
 		if (kb.matches(keyData, "tui.select.down")) {
-			this.moveCursor(1);
+			if (this.cursor >= 0) this.moveCursor(1);
+			else this.scroll(1);
 			return;
 		}
 		if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n" || keyData === "\r") {

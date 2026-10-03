@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { type ExtensionCommandContext, initTheme } from "@earendil-works/pi-coding-agent";
-import { loopEditor, loopInput, runWizard, type StepOutcome, type WizardStep } from "./loop-ui.ts";
+import { HOST_ROWS } from "./fit.ts";
+import { loopEditor, loopInput, loopSelect, runWizard, type StepOutcome, type WizardStep } from "./loop-ui.ts";
 
 // ExtensionEditorComponent reads pi's global theme when it is constructed.
 initTheme("dark");
@@ -210,5 +211,34 @@ describe("loopInput", () => {
 			ui: { input: async () => "", notify: () => {} },
 		} as unknown as ExtensionCommandContext;
 		assert.equal(await loopInput(ctx, "t", { initial: "keep-me" }), "keep-me");
+	});
+});
+
+describe("loopSelect on a short terminal", () => {
+	it("leaves Pi its rows and follows the cursor round the wrap", async () => {
+		const ROWS = 20;
+		let component: { render(width: number): string[]; handleInput(data: string): void } | undefined;
+		const tui = { requestRender() {}, terminal: { rows: ROWS, columns: 80 } };
+		const theme = { fg: (_c: string, t: string) => t, bold: (t: string) => t };
+		const ctx = {
+			mode: "tui",
+			ui: {
+				custom: (factory: (...args: unknown[]) => typeof component) =>
+					new Promise((resolve) => {
+						component = factory(tui, theme, undefined, resolve);
+					}),
+			},
+		} as unknown as ExtensionCommandContext;
+		const options = Array.from({ length: 14 }, (_, i) => `provider-${i}`);
+		void loopSelect(ctx, "Built-in provider", options);
+
+		const first = component!.render(80);
+		assert.ok(first.length <= ROWS - HOST_ROWS, `${first.length} lines on ${ROWS} rows`);
+		assert.ok(first.some((line) => line.includes("→ provider-0")));
+
+		component!.handleInput(UP); // wraps to the last option
+		const wrapped = component!.render(80);
+		assert.ok(wrapped.length <= ROWS - HOST_ROWS);
+		assert.ok(wrapped.some((line) => line.includes("→ provider-13")));
 	});
 });

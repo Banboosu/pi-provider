@@ -1,6 +1,7 @@
 import type { ExtensionCommandContext, Theme } from "@earendil-works/pi-coding-agent";
 import { DynamicBorder, keyHint, rawKeyHint } from "@earendil-works/pi-coding-agent";
 import { Container, getKeybindings, Spacer, Text, truncateToWidth, type TUI, visibleWidth } from "@earendil-works/pi-tui";
+import { otherRows, spareRows, visibleRows } from "./fit.ts";
 
 /**
  * Row menu for object-first screens: the provider list, a provider's detail
@@ -59,7 +60,7 @@ export interface RowMenuOptions {
 	enterLabel?: string;
 	/** Hint label for Esc; defaults to "back". */
 	escLabel?: string;
-	/** Rows shown at once before the list scrolls. */
+	/** Most rows shown at once before the list scrolls; a short terminal shows fewer. */
 	maxVisible?: number;
 }
 
@@ -91,6 +92,8 @@ export class RowMenu extends Container {
 	private readonly listContainer = new Container();
 	private readonly hintText = new Text("", 1, 0);
 	private cursor: number;
+	/** Rows the list shows; render() fits it to the terminal. */
+	private visible: number;
 
 	constructor(
 		tui: TUI,
@@ -108,6 +111,7 @@ export class RowMenu extends Container {
 			? options.entries.findIndex((entry) => selectable(entry) && entry.id === options.initialId)
 			: -1;
 		this.cursor = initial >= 0 ? initial : options.entries.findIndex(selectable);
+		this.visible = options.maxVisible ?? 20;
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
@@ -134,7 +138,23 @@ export class RowMenu extends Container {
 		return entry && selectable(entry) ? entry : undefined;
 	}
 
+	override render(width: number): string[] {
+		const room = spareRows(this.tui.terminal.rows, otherRows(this.children, width, this.listContainer));
+		const visible = visibleRows(this.options.entries.length, room, this.options.maxVisible ?? 20);
+		if (visible !== this.visible) {
+			this.visible = visible;
+			this.buildList();
+		}
+		return super.render(width);
+	}
+
 	private refresh(): void {
+		this.buildList();
+		this.hintText.setText(this.renderHint());
+		this.tui.requestRender();
+	}
+
+	private buildList(): void {
 		this.listContainer.clear();
 		const { entries } = this.options;
 		const valueWidth = Math.min(
@@ -146,12 +166,12 @@ export class RowMenu extends Container {
 			Math.max(0, ...entries.filter((e) => isRow(e) && e.detail !== undefined).map((e) => visibleWidth((e as MenuRow).label))),
 		);
 
-		const maxVisible = this.options.maxVisible ?? 20;
+		const visible = this.visible;
 		let start = 0;
 		let end = entries.length;
-		if (entries.length > maxVisible) {
-			start = Math.max(0, Math.min(this.cursor - Math.floor(maxVisible / 2), entries.length - maxVisible));
-			end = start + maxVisible;
+		if (entries.length > visible) {
+			start = Math.max(0, Math.min(this.cursor - Math.floor(visible / 2), entries.length - visible));
+			end = start + visible;
 		}
 
 		for (let i = start; i < end; i++) {
@@ -162,9 +182,6 @@ export class RowMenu extends Container {
 			const total = entries.filter(selectable).length;
 			this.listContainer.addChild(new RowLine(this.theme.fg("dim", `  (${position}/${total})`)));
 		}
-
-		this.hintText.setText(this.renderHint());
-		this.tui.requestRender();
 	}
 
 	private renderEntry(entry: MenuEntry, focused: boolean, valueWidth: number, detailWidth: number): string | RowParts {

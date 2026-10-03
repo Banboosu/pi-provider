@@ -16,6 +16,7 @@ import {
 	Text,
 	type TUI,
 } from "@earendil-works/pi-tui";
+import { blockWindow, otherRows, spareRows } from "./fit.ts";
 
 /**
  * Wrap-around single select + editor, replacing pi's host dialogs which clamp
@@ -27,6 +28,8 @@ import {
 
 class WrapSelectComponent extends Container {
 	private selectedIndex = 0;
+	/** First option drawn at the last render; a short terminal scrolls from here. */
+	private top = 0;
 	private readonly listContainer = new Container();
 	private readonly tui: TUI;
 	private readonly theme: Theme;
@@ -82,6 +85,24 @@ class WrapSelectComponent extends Container {
 				: `  ${this.theme.fg("text", this.options[i]!)}`;
 			this.listContainer.addChild(new Text(text, 1, 0));
 		}
+	}
+
+	override render(width: number): string[] {
+		// An option can wrap, so the window is measured in rendered lines.
+		const options = this.listContainer.children.map((option) => option.render(width));
+		const room = spareRows(this.tui.terminal.rows, otherRows(this.children, width, this.listContainer));
+		const { start, end } = blockWindow(
+			options.map((lines) => lines.length),
+			room,
+			this.top,
+			this.selectedIndex,
+		);
+		this.top = start;
+		const list = options.slice(start, end).flat();
+		if (start > 0 || end < options.length) {
+			list.push(this.theme.fg("dim", `   (${this.selectedIndex + 1}/${options.length})`));
+		}
+		return this.children.flatMap((child) => (child === this.listContainer ? list : child.render(width)));
 	}
 
 	handleInput(keyData: string): void {

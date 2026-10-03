@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { initTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { type ChecksPanelOutcome, ChecksPanel, type CheckResult, type PanelCheck } from "./checks-panel.ts";
+import { HOST_ROWS } from "./fit.ts";
 
 // DynamicBorder and keyHint() read pi's global theme; the panel's own colouring
 // goes through the injected theme, so a pass-through stub keeps the rendered
@@ -12,7 +13,7 @@ const stubTheme = {
 	fg: (_color: string, text: string) => text,
 	bold: (text: string) => text,
 } as unknown as Theme;
-const stubTui = { requestRender() {} } as unknown as TUI;
+const stubTui = { requestRender() {}, terminal: { rows: 40, columns: 100 } } as unknown as TUI;
 
 interface Controllable {
 	check: PanelCheck;
@@ -246,6 +247,54 @@ describe("ChecksPanel decisions after a run", () => {
 		panel.handleInput("\x1b");
 		assert.equal(outcomes[0]?.kind, "closed");
 		assert.equal(outcomes[0]?.summary.finished, false);
+		panel.dispose();
+	});
+});
+
+/** Fullscreen Pi cuts a panel taller than its dock from the bottom: the verdict and hints. */
+describe("ChecksPanel on a short terminal", () => {
+	const ROWS = 30;
+	const tui = { requestRender() {}, terminal: { rows: ROWS, columns: 100 } } as unknown as TUI;
+	const UP = "\x1b[A";
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI escapes
+	const plain = (lines: string[]) => lines.join("\n").replace(/\x1b\[[0-9;]*m/g, "");
+	const models = (failing: number[]): PanelCheck[] =>
+		Array.from({ length: 30 }, (_, i) => ({
+			id: `m${i}`,
+			label: `Chat test (m${i})`,
+			run: async (): Promise<CheckResult> =>
+				failing.includes(i) ? { ok: false, detail: "HTTP 400", hint: "try compat" } : { ok: true, detail: "hi" },
+		}));
+
+	it("keeps the verdict and the key hints on screen", async () => {
+		const panel = new ChecksPanel(tui, stubTheme, { title: "t", checks: models([27]) }, () => {});
+		await flush();
+		const lines = panel.render(100);
+		assert.ok(lines.length <= ROWS - HOST_ROWS, `${lines.length} lines on ${ROWS} rows`);
+		const out = plain(lines);
+		assert.ok(out.includes("1 of 30 check(s) failed"));
+		assert.ok(out.includes("run again"));
+		panel.dispose();
+	});
+
+	it("shows the first failure, then lets ↑↓ move the list", async () => {
+		const panel = new ChecksPanel(tui, stubTheme, { title: "t", checks: models([27]) }, () => {});
+		await flush();
+		assert.ok(plain(panel.render(100)).includes("✗ Chat test (m27)"));
+		for (let i = 0; i < 30; i++) panel.handleInput(UP);
+		const out = plain(panel.render(100));
+		assert.ok(out.includes("Chat test (m0)"));
+		assert.ok(!out.includes("(m27)"));
+		panel.dispose();
+	});
+
+	it("keeps the row being picked in view", async () => {
+		const panel = new ChecksPanel(tui, stubTheme, { title: "t", checks: models([]), pickLabel: "use model" }, () => {});
+		await flush();
+		panel.handleInput(UP); // wraps from the first row to the last
+		const lines = plain(panel.render(100)).split("\n");
+		assert.ok(lines.length <= ROWS - HOST_ROWS, `${lines.length} lines on ${ROWS} rows`);
+		assert.ok(lines.some((line) => line.includes("→") && line.includes("(m29)")));
 		panel.dispose();
 	});
 });

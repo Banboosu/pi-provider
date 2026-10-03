@@ -8,6 +8,7 @@ import {
 	visibleWidth,
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+import { spareRows, visibleRows } from "./fit.ts";
 
 export interface CheckboxItem {
 	/** Stable id / value returned when selected. */
@@ -91,6 +92,8 @@ export class MultiSelectList extends SettingsList {
 	private readonly onToggle: (id: string, newValue: string) => void;
 	private readonly extras: MultiSelectExtras;
 	private error = "";
+	/** Rows this list may fill, set by its host before each render; undefined means no limit. */
+	private room: number | undefined;
 
 	constructor(
 		items: SettingItem[],
@@ -112,6 +115,11 @@ export class MultiSelectList extends SettingsList {
 	/** Show an inline error above the key hints until the next toggle. */
 	setError(text: string): void {
 		this.error = text;
+	}
+
+	/** Limit the rows the list draws, search box and hints included. */
+	setRoom(rows: number | undefined): void {
+		this.room = rows;
 	}
 
 	override handleInput(data: string): void {
@@ -190,12 +198,28 @@ export class MultiSelectList extends SettingsList {
 			return lines;
 		}
 
-		// Visible window, centered on the cursor (same math as the base class).
+		// Description follows the cursor, like the base list.
+		const below: string[] = [];
+		const focused = displayItems[selectedIndex];
+		if (focused?.description) {
+			below.push("");
+			for (const line of wrapTextWithAnsi(focused.description, width - 4)) {
+				below.push(theme.description(`  ${line}`));
+			}
+		}
+		this.addChecklistHint(below, width);
+
+		// Visible window, centered on the cursor (same math as the base class),
+		// shortened to what the terminal has left.
+		const visible =
+			this.room === undefined
+				? maxVisible
+				: visibleRows(displayItems.length, this.room - lines.length - below.length, maxVisible);
 		const startIndex = Math.max(
 			0,
-			Math.min(selectedIndex - Math.floor(maxVisible / 2), displayItems.length - maxVisible),
+			Math.min(selectedIndex - Math.floor(visible / 2), displayItems.length - visible),
 		);
-		const endIndex = Math.min(startIndex + maxVisible, displayItems.length);
+		const endIndex = Math.min(startIndex + visible, displayItems.length);
 		const detailFor = this.extras.detailFor;
 		const labelColumn = detailFor
 			? Math.min(MAX_LABEL_COLUMN, Math.max(...items.map((item) => visibleWidth(item.label))))
@@ -218,16 +242,7 @@ export class MultiSelectList extends SettingsList {
 			lines.push(theme.hint(truncateToWidth(`  (${selectedIndex + 1}/${displayItems.length})`, width - 2, "")));
 		}
 
-		// Description follows the cursor, like the base list.
-		const focused = displayItems[selectedIndex];
-		if (focused?.description) {
-			lines.push("");
-			for (const line of wrapTextWithAnsi(focused.description, width - 4)) {
-				lines.push(theme.description(`  ${line}`));
-			}
-		}
-
-		this.addChecklistHint(lines, width);
+		lines.push(...below);
 		return lines;
 	}
 
@@ -371,6 +386,7 @@ export async function checkboxSelect(
 
 		return {
 			render(width: number) {
+				settingsList.setRoom(spareRows(tui.terminal.rows, header.render(width).length));
 				return container.render(width);
 			},
 			invalidate() {

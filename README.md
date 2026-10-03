@@ -172,6 +172,8 @@ At most 4 chat requests are in flight at once (a burst of dozens comes back as 4
 | `s` | Choose which models to test |
 | `r` | Run again |
 
+When the terminal is too short for every row, the list scrolls so the verdict and keys stay on screen. During the run it keeps the running check in view; afterwards, the row being picked or the first failure. With no passing model to pick, ↑↓ scroll it.
+
 `baseUrl`-only proxies get the catalog probe only — their chat goes through the built-in provider.
 
 ### `/provider proxy`

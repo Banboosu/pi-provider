@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { KeybindingsManager, type SettingItem, TUI_KEYBINDINGS } from "@earendil-works/pi-tui";
 import { MultiSelectList } from "./checkbox-select.ts";
+import { HOST_ROWS } from "./fit.ts";
 
 const kb = new KeybindingsManager(TUI_KEYBINDINGS);
 
@@ -164,5 +165,22 @@ describe("MultiSelectList rendering", () => {
 		const out = list.render(60).join("\n");
 		assert.ok(out.includes("[ ] gpt-4o-mini"));
 		assert.ok(!out.includes("[x]")); // the checked row is filtered out
+	});
+});
+
+describe("MultiSelectList room", () => {
+	const ids = Array.from({ length: 30 }, (_, i) => `model-${i}`);
+
+	it("shortens the list to the rows its host gives it", () => {
+		const { list } = makeList(ids, new Set());
+		list.setRoom(15);
+		assert.ok(list.render(60).length <= 15);
+	});
+
+	it("shows every row when they fit", () => {
+		const { list } = makeList(ids, new Set());
+		list.setRoom(40 - HOST_ROWS);
+		const rows = list.render(60).filter((line) => line.includes("model-"));
+		assert.equal(rows.length, 30);
 	});
 });
