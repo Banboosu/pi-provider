@@ -221,11 +221,14 @@ pi 取凭据的顺序是：`--api-key`、`/login` 存的凭据（`auth.json`）�
 ```bash
 git clone https://github.com/BlueOcean223/pi-provider.git
 cd pi-provider
+bun install
 pi install "$(pwd)"
-npm test
+bun run test
 ```
 
 本地路径会直接写入设置、不复制文件，修改后执行 `/reload` 即生效。
+
+测试和类型检查会 import pi 在运行时提供的包（`@earendil-works/*`、`typebox`）。`bun install` 不安装它们（见 `bunfig.toml`），所以它们来自你正在运行的 pi：把它们从 pi 的安装目录链接到本目录或上级目录的 `node_modules/` 下。
 
 文件结构：
 
@@ -257,9 +260,9 @@ pi-provider/
     └── testing/tui-harness.ts # 测试中用脚本按键驱动 ui.custom 界面
 ```
 
-运行 `npm test`（Node 22.19+）执行测试：覆盖各组件（checklist、行列表、输入框、测试面板）、向导步骤机、模型 diff/merge 不变量、compat 提示，以及 TUI 模式下用脚本按键跑完整流程（新增 → 汇总 → 保存 → 测试 → 切换模型、compat 修复后重测、在供应商页面修改 key）和 RPC 模式下的流程。
+运行 `bun run test` 执行测试，`bun run typecheck` 执行类型检查。测试覆盖各组件（checklist、行列表、输入框、测试面板）、向导步骤机、模型 diff/merge 不变量、compat 提示，以及 TUI 模式下用脚本按键跑完整流程（新增 → 汇总 → 保存 → 测试 → 切换模型、compat 修复后重测、在供应商页面修改 key）和 RPC 模式下的流程。
 
-`npm publish` 前会先跑测试和 `scripts/verify-pack.mjs`：它按 import 关系检查 npm 实际要打包的文件（不缺文件，也不带测试和本地笔记）。
+`npm publish` 前会先跑测试、类型检查和 `scripts/verify-pack.mjs`：它按 import 关系检查 npm 实际要打包的文件（不缺文件，也不带测试和本地笔记）。
 
 ## 注意事项
 

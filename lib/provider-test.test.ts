@@ -46,7 +46,7 @@ function harness(): Harness {
 	const selectTitles: string[] = [];
 
 	const previousFetch = globalThis.fetch;
-	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+	globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
 		const url = String(input);
 		if (url.endsWith("/models")) {
 			return Response.json({ data: RELAY_MODELS.map((id) => ({ id })) });

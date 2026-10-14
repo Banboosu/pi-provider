@@ -53,7 +53,7 @@ function flat(text: string): string {
 }
 
 function relayCatalog(ids: string[]): void {
-	globalThis.fetch = (async (input: RequestInfo | URL) => {
+	globalThis.fetch = (async (input: string | URL | Request) => {
 		if (String(input).endsWith("/models")) return Response.json({ data: ids.map((id) => ({ id })) });
 		return new Response("not found", { status: 404 });
 	}) as typeof fetch;

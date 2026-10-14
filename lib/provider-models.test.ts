@@ -37,7 +37,7 @@ describe("/provider models", () => {
 				),
 			);
 
-			globalThis.fetch = async (url, init) => {
+			globalThis.fetch = (async (url, init) => {
 				assert.equal(String(url), "https://relay.test/v1/models");
 				assert.equal((init?.headers as Record<string, string>).Authorization, "Bearer resolved-key");
 				assert.equal((init?.headers as Record<string, string>)["x-relay-scope"], "models");
@@ -52,7 +52,7 @@ describe("/provider models", () => {
 					}),
 					{ status: 200, headers: { "content-type": "application/json" } },
 				);
-			};
+			}) as typeof fetch;
 
 			let command: { handler: (args: string, ctx: never) => Promise<void> } | undefined;
 			extension({
@@ -216,7 +216,7 @@ describe("/provider models", () => {
 			assert.ok(command);
 
 			const previousFetch = globalThis.fetch;
-			globalThis.fetch = (async () => Response.json({ data: [{ id: "model-a" }] })) as typeof fetch;
+			globalThis.fetch = (async (_url: string | URL | Request) => Response.json({ data: [{ id: "model-a" }] })) as typeof fetch;
 			const selections = ["Remove models"];
 			try {
 				await command.handler("models relay", {

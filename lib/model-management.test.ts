@@ -121,7 +121,7 @@ describe("refreshModelEntries", () => {
 
 		const result = refreshModelEntries(existing, enrich);
 
-		assert.deepEqual(result.models[0].compat, {
+		assert.deepEqual(result.models[0]!.compat, {
 			forceAdaptiveThinking: true,
 			supportsStrictTools: true,
 		});
@@ -144,7 +144,7 @@ describe("refreshModelEntries", () => {
 		];
 
 		const result = refreshModelEntries(existing, enrich);
-		const next = result.models[0];
+		const next = result.models[0]!;
 
 		assert.equal(next.id, "claude-opus-4-6");
 		assert.equal(next.name, "My Renamed Opus");
@@ -162,7 +162,7 @@ describe("refreshModelEntries", () => {
 
 		const result = refreshModelEntries(existing, noCompat);
 
-		assert.ok(!("compat" in result.models[0]));
+		assert.ok(!("compat" in result.models[0]!));
 		assert.deepEqual(
 			result.changes.map((c) => `${c.field}:${c.from === undefined ? "add" : c.to === undefined ? "del" : "set"}`),
 			["reasoning:add", "compat:del"],

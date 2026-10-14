@@ -15,7 +15,7 @@ const calls: Call[] = [];
 
 function mockFetch(respond: Responder): void {
 	calls.length = 0;
-	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+	globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
 		const call: Call = {
 			url: String(input),
 			body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,

@@ -221,11 +221,14 @@ Once saved, press Enter on a passing model in the test panel to switch to it, or
 ```bash
 git clone https://github.com/BlueOcean223/pi-provider.git
 cd pi-provider
+bun install
 pi install "$(pwd)"
-npm test
+bun run test
 ```
 
 A local path is added to settings without copying, so edits apply on the next `/reload`.
+
+The tests and the type check import the packages pi supplies at runtime (`@earendil-works/*`, `typebox`). `bun install` leaves them out (`bunfig.toml`), so they come from the pi you run: link them from your pi install into `node_modules/` here or in a parent directory.
 
 Files:
 
@@ -257,9 +260,9 @@ pi-provider/
     └── testing/tui-harness.ts # drives ui.custom screens with scripted keys in tests
 ```
 
-Run the tests with `npm test` (Node 22.19+). They cover the components (checklist, row menu, input, test panel), the wizard step machine, model diff/merge invariants, compat hints, and whole flows in TUI mode with scripted keys (add → review → save → test → switch, compat fix and re-test, key edit on the provider page) and in RPC mode.
+Run the tests with `bun run test` and the type check with `bun run typecheck`. The tests cover the components (checklist, row menu, input, test panel), the wizard step machine, model diff/merge invariants, compat hints, and whole flows in TUI mode with scripted keys (add → review → save → test → switch, compat fix and re-test, key edit on the provider page) and in RPC mode.
 
-`npm publish` runs the tests and `scripts/verify-pack.mjs` first; the script checks the tarball npm would ship against the import graph (nothing missing, no tests or local notes included).
+`npm publish` runs the tests, the type check and `scripts/verify-pack.mjs` first; the script checks the tarball npm would ship against the import graph (nothing missing, no tests or local notes included).
 
 ## Notes
 
