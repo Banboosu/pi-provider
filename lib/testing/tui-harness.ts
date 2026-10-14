@@ -38,8 +38,9 @@ interface Component {
 	dispose?(): void;
 }
 
+// pi-tui's cursor markers are APC sequences (ESC _ … BEL) that the TUI removes before output.
 // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI escapes
-const ANSI = /\x1b\[[0-9;]*m|\x1b\]8;;[^\x07]*\x07/g;
+const ANSI = /\x1b\[[0-9;]*m|\x1b\]8;;[^\x07]*\x07|\x1b_[^\x07]*\x07/g;
 
 /** Pass-through theme: colours vanish, so assertions see plain text. */
 const theme = new Proxy(

@@ -171,8 +171,9 @@ function openInput(opts: Parameters<typeof loopInput>[2]) {
 	} as unknown as ExtensionCommandContext;
 	const result = loopInput(ctx, "Base URL", opts);
 	return {
+		// Colours, and pi-tui's APC cursor markers (ESC _ … BEL).
 		// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI escapes
-		text: () => component!.render(80).join("\n").replace(/\x1b\[[0-9;]*m/g, ""),
+		text: () => component!.render(80).join("\n").replace(/\x1b\[[0-9;]*m|\x1b_[^\x07]*\x07/g, ""),
 		press: (...keys: string[]) => {
 			for (const key of keys) component!.handleInput(key);
 		},
