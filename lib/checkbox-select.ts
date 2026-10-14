@@ -342,7 +342,7 @@ export async function checkboxSelect(
 		// Same palette as pi's getSettingsListTheme(), with the value slot
 		// repurposed as the checkbox renderer: checked = accent, unchecked = dim.
 		const listTheme: SettingsListTheme = {
-			label: (text, isSelected) => (isSelected ? theme.fg("accent", text) : theme.fg("text", text)),
+			label: (text, isSelected) => (isSelected ? theme.fg("accent", text) : text),
 			value: (text) => (text === "[x]" ? theme.fg("accent", text) : theme.fg("dim", text)),
 			description: (text) => theme.fg("dim", text),
 			cursor: theme.fg("accent", "→ "),

@@ -1,7 +1,8 @@
 import type { ExtensionCommandContext, Theme } from "@earendil-works/pi-coding-agent";
 import { DynamicBorder, keyHint, rawKeyHint } from "@earendil-works/pi-coding-agent";
-import { Container, getKeybindings, Spacer, Text, truncateToWidth, type TUI, visibleWidth } from "@earendil-works/pi-tui";
+import { Container, getKeybindings, Spacer, truncateToWidth, type TUI, visibleWidth } from "@earendil-works/pi-tui";
 import { otherRows, spareRows, visibleRows } from "./fit.ts";
+import { ThemedText } from "./themed-text.ts";
 
 /**
  * Row menu for object-first screens: the provider list, a provider's detail
@@ -90,7 +91,7 @@ export class RowMenu extends Container {
 	private readonly options: RowMenuOptions;
 	private readonly onChoose: (choice: RowMenuChoice | undefined) => void;
 	private readonly listContainer = new Container();
-	private readonly hintText = new Text("", 1, 0);
+	private readonly hintText = new ThemedText(() => this.renderHint());
 	private cursor: number;
 	/** Rows the list shows; render() fits it to the terminal. */
 	private visible: number;
@@ -115,12 +116,13 @@ export class RowMenu extends Container {
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("accent", theme.bold(options.title)), 1, 0));
-		if (options.subtitle) this.addChild(new Text(theme.fg("muted", options.subtitle), 1, 0));
+		this.addChild(new ThemedText(() => theme.fg("accent", theme.bold(options.title))));
+		const { subtitle } = options;
+		if (subtitle) this.addChild(new ThemedText(() => theme.fg("muted", subtitle)));
 		if (options.notes?.length) {
 			this.addChild(new Spacer(1));
 			for (const note of options.notes) {
-				this.addChild(new Text(theme.fg(note.tone ?? "muted", note.text), 1, 0));
+				this.addChild(new ThemedText(() => theme.fg(note.tone ?? "muted", note.text)));
 			}
 		}
 		this.addChild(new Spacer(1));
@@ -148,9 +150,14 @@ export class RowMenu extends Container {
 		return super.render(width);
 	}
 
+	/** Rows are styled when built, so a theme change rebuilds them. */
+	override invalidate(): void {
+		this.buildList();
+		super.invalidate();
+	}
+
 	private refresh(): void {
 		this.buildList();
-		this.hintText.setText(this.renderHint());
 		this.tui.requestRender();
 	}
 

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { KeybindingsManager, type SettingItem, TUI_KEYBINDINGS } from "@earendil-works/pi-tui";
-import { MultiSelectList } from "./checkbox-select.ts";
+import { checkboxSelect, MultiSelectList } from "./checkbox-select.ts";
 import { HOST_ROWS } from "./fit.ts";
 
 const kb = new KeybindingsManager(TUI_KEYBINDINGS);
@@ -165,6 +166,30 @@ describe("MultiSelectList rendering", () => {
 		const out = list.render(60).join("\n");
 		assert.ok(out.includes("[ ] gpt-4o-mini"));
 		assert.ok(!out.includes("[x]")); // the checked row is filtered out
+	});
+});
+
+describe("checkboxSelect palette", () => {
+	it("leaves unfocused labels in the terminal's default colour, like pi's settings list", () => {
+		let component: { render(width: number): string[] } | undefined;
+		const tui = { requestRender() {}, terminal: { rows: 40, columns: 100 } };
+		const theme = { fg: (color: string, text: string) => `<${color}>${text}`, bold: (text: string) => text };
+		const ctx = {
+			mode: "tui",
+			ui: {
+				custom: (factory: (...args: unknown[]) => typeof component) =>
+					new Promise(() => {
+						component = factory(tui, theme, kb, () => {});
+					}),
+			},
+		} as unknown as ExtensionCommandContext;
+		void checkboxSelect(ctx, "Models", [
+			{ id: "alpha", label: "alpha", checked: true },
+			{ id: "beta", label: "beta" },
+		]);
+		const out = component!.render(100).join("\n");
+		assert.ok(out.includes("<accent>[x] <accent>alpha"), out);
+		assert.ok(out.includes("<dim>[ ] beta"), out);
 	});
 });
 

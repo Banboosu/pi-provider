@@ -2,6 +2,7 @@ import type { ExtensionCommandContext, Theme } from "@earendil-works/pi-coding-a
 import { DynamicBorder, keyHint, rawKeyHint } from "@earendil-works/pi-coding-agent";
 import { Container, getKeybindings, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
 import { blockWindow, otherRows, spareRows } from "./fit.ts";
+import { ThemedText } from "./themed-text.ts";
 
 /**
  * Live checklist panel for provider tests.
@@ -153,12 +154,13 @@ export class ChecksPanel extends Container {
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("accent", theme.bold(options.title)), 1, 0));
-		if (options.subtitle) this.addChild(new Text(theme.fg("muted", options.subtitle), 1, 0));
+		this.addChild(new ThemedText(() => theme.fg("accent", theme.bold(options.title))));
+		const { subtitle } = options;
+		if (subtitle) this.addChild(new ThemedText(() => theme.fg("muted", subtitle)));
 		if (options.notes?.length) {
 			this.addChild(new Spacer(1));
 			for (const note of options.notes) {
-				this.addChild(new Text(theme.fg("warning", `⚠ ${note}`), 1, 0));
+				this.addChild(new ThemedText(() => theme.fg("warning", `⚠ ${note}`)));
 			}
 		}
 		this.addChild(new Spacer(1));
@@ -366,6 +368,12 @@ export class ChecksPanel extends Container {
 			list.push(t.fg("dim", `${indent}${parts.join(" · ")}`));
 		}
 		return this.children.flatMap((child) => (child === this.listContainer ? list : child.render(width)));
+	}
+
+	/** Rows and the status line are styled when built, so a theme change rebuilds them. */
+	override invalidate(): void {
+		this.refresh();
+		super.invalidate();
 	}
 
 	/**

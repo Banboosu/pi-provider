@@ -17,6 +17,7 @@ import {
 	type TUI,
 } from "@earendil-works/pi-tui";
 import { blockWindow, otherRows, spareRows } from "./fit.ts";
+import { ThemedText } from "./themed-text.ts";
 
 /**
  * Wrap-around single select + editor, replacing pi's host dialogs which clamp
@@ -56,19 +57,18 @@ class WrapSelectComponent extends Container {
 		this.selectedIndex = Math.min(Math.max(initialIndex, 0), Math.max(options.length - 1, 0));
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
+		this.addChild(new ThemedText(() => theme.fg("accent", theme.bold(title))));
 		this.addChild(new Spacer(1));
 		this.addChild(this.listContainer);
 		this.addChild(new Spacer(1));
 		this.addChild(
-			new Text(
-				rawKeyHint("↑↓", "navigate (loops)") +
+			new ThemedText(
+				() =>
+					rawKeyHint("↑↓", "navigate (loops)") +
 					"  " +
 					keyHint("tui.select.confirm", "select") +
 					"  " +
 					keyHint("tui.select.cancel", escLabel),
-				1,
-				0,
 			),
 		);
 		this.addChild(new Spacer(1));
@@ -103,6 +103,12 @@ class WrapSelectComponent extends Container {
 			list.push(this.theme.fg("dim", `   (${this.selectedIndex + 1}/${options.length})`));
 		}
 		return this.children.flatMap((child) => (child === this.listContainer ? list : child.render(width)));
+	}
+
+	/** Options are styled when built, so a theme change rebuilds them. */
+	override invalidate(): void {
+		this.updateList();
+		super.invalidate();
 	}
 
 	handleInput(keyData: string): void {
@@ -180,7 +186,8 @@ export interface LoopInputOptions {
  */
 class LoopInputComponent extends Container implements Focusable {
 	private readonly input: Input;
-	private readonly errorText = new Text("", 1, 0);
+	private error = "";
+	private readonly errorText = new ThemedText(() => (this.error ? this.theme.fg("error", `✗ ${this.error}`) : ""));
 	private readonly theme: Theme;
 	private readonly tui: TUI;
 	private readonly validate?: (value: string) => string | undefined;
@@ -227,19 +234,17 @@ class LoopInputComponent extends Container implements Focusable {
 
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
-		this.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
+		this.addChild(new ThemedText(() => theme.fg("accent", theme.bold(title))));
 		for (const line of opts.hint ?? []) {
-			this.addChild(new Text(theme.fg("muted", line), 1, 0));
+			this.addChild(new ThemedText(() => theme.fg("muted", line)));
 		}
 		this.addChild(new Spacer(1));
 		this.addChild(this.input);
 		this.addChild(this.errorText);
 		this.addChild(new Spacer(1));
 		this.addChild(
-			new Text(
-				`${keyHint("tui.select.confirm", "submit")}  ${keyHint("tui.select.cancel", opts.escLabel ?? "back")}`,
-				1,
-				0,
+			new ThemedText(
+				() => `${keyHint("tui.select.confirm", "submit")}  ${keyHint("tui.select.cancel", opts.escLabel ?? "back")}`,
 			),
 		);
 		this.addChild(new Spacer(1));
@@ -252,7 +257,7 @@ class LoopInputComponent extends Container implements Focusable {
 			const value = this.input.getValue();
 			const error = this.validate?.(value);
 			if (error) {
-				this.errorText.setText(this.theme.fg("error", `✗ ${error}`));
+				this.error = error;
 				this.tui.requestRender();
 				return;
 			}
@@ -264,7 +269,7 @@ class LoopInputComponent extends Container implements Focusable {
 			return;
 		}
 		this.input.handleInput(keyData);
-		this.errorText.setText("");
+		this.error = "";
 		this.tui.requestRender();
 	}
 }
