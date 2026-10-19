@@ -1,5 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { ModelEntry, ProviderApi } from "./types.ts";
+import type { ListedModel, ModelEntry, ProviderApi } from "./types.ts";
 
 /** Subset of pi official model fields we copy onto relay models. */
 export interface OfficialModelMeta {
@@ -322,24 +322,34 @@ const DEFAULT_META = {
 
 /**
  * Build models.json entry: keep relay id, fill metadata from official catalog when possible.
+ *
+ * What the server's model list reported (`reported`) only replaces the
+ * defaults of a model the catalog doesn't know; a catalog match describes the
+ * upstream model and wins.
  */
 export function enrichModelEntry(
 	catalog: OfficialModelMeta[],
 	relayId: string,
 	preferredApi?: ProviderApi,
 	relayName?: string,
+	reported?: Pick<ListedModel, "contextWindow" | "input">,
 ): EnrichResult {
 	const official = matchOfficialModel(catalog, relayId, preferredApi);
 
 	if (!official) {
+		const contextWindow = reported?.contextWindow;
 		return {
 			entry: {
 				id: relayId,
 				...(relayName && relayName !== relayId ? { name: relayName } : {}),
 				...DEFAULT_META,
+				...(contextWindow ? { contextWindow } : {}),
+				...(reported?.input ? { input: reported.input } : {}),
 			},
 			status: "default",
-			detail: "no official match · defaults 128k",
+			detail: contextWindow
+				? `no official match · ${formatCtx(contextWindow)} from server`
+				: "no official match · defaults 128k",
 		};
 	}
 

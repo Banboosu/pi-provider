@@ -1,9 +1,4 @@
-import type { ModelEntry } from "./types.ts";
-
-export interface RelayModelInfo {
-	id: string;
-	name?: string;
-}
+import type { ListedModel, ModelEntry } from "./types.ts";
 
 /**
  * Return relay models that are not configured locally yet.
@@ -14,10 +9,10 @@ export interface RelayModelInfo {
  */
 export function findNewRelayModels(
 	existing: ModelEntry[],
-	listed: RelayModelInfo[],
-): RelayModelInfo[] {
+	listed: ListedModel[],
+): ListedModel[] {
 	const seen = new Set(existing.map((model) => model.id));
-	const additions: RelayModelInfo[] = [];
+	const additions: ListedModel[] = [];
 	for (const model of listed) {
 		if (seen.has(model.id)) continue;
 		seen.add(model.id);

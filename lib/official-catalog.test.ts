@@ -100,6 +100,36 @@ describe("enrichModelEntry compat forwarding", () => {
 	});
 });
 
+describe("enrichModelEntry server-reported metadata", () => {
+	const reported = { contextWindow: 32_768, input: ["text", "image"] as Array<"text" | "image"> };
+
+	it("replaces the defaults of a model the catalog doesn't know", () => {
+		const r = enrichModelEntry([opus46], "qwen3-vl-8b", "openai-completions", undefined, reported);
+		assert.equal(r.status, "default");
+		assert.equal(r.entry.contextWindow, 32_768);
+		assert.deepEqual(r.entry.input, ["text", "image"]);
+		assert.equal(r.entry.maxTokens, 16_384);
+		assert.equal(r.detail, "no official match · 33k from server");
+	});
+
+	it("keeps the defaults when the server reported nothing", () => {
+		const r = enrichModelEntry([opus46], "qwen3-vl-8b", "openai-completions", undefined, {});
+		assert.equal(r.entry.contextWindow, 128_000);
+		assert.deepEqual(r.entry.input, ["text"]);
+		assert.equal(r.detail, "no official match · defaults 128k");
+	});
+
+	it("leaves a catalog match to the catalog", () => {
+		const r = enrichModelEntry([opus46], "claude-opus-4-6", "anthropic-messages", undefined, {
+			contextWindow: 200_000,
+			input: ["text"],
+		});
+		assert.equal(r.status, "matched");
+		assert.equal(r.entry.contextWindow, 1_000_000);
+		assert.deepEqual(r.entry.input, ["text", "image"]);
+	});
+});
+
 describe("matchOfficialModel", () => {
 	const opus45: OfficialModelMeta = {
 		id: "claude-opus-4-5",

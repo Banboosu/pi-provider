@@ -27,6 +27,16 @@ export interface ModelEntry {
 	[key: string]: unknown;
 }
 
+/** A model as a relay's or local server's `GET /v1/models` lists it. */
+export interface ListedModel {
+	id: string;
+	name?: string;
+	/** Context window the server reports for this model, if it reports one. */
+	contextWindow?: number;
+	/** Set only when the server advertises image input. */
+	input?: Array<"text" | "image">;
+}
+
 export interface ProviderConfig {
 	name?: string;
 	baseUrl?: string;

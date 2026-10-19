@@ -44,8 +44,9 @@ describe("/provider models", () => {
 				return new Response(
 					JSON.stringify({
 						data: [
-							{ id: "model-a" },
-							{ id: "model-b" },
+							// A reported context window fills in new models only.
+							{ id: "model-a", max_model_len: 65536 },
+							{ id: "model-b", max_model_len: 32768 },
 							{ id: "model-b" },
 							{ id: "model-c" },
 						],
@@ -113,6 +114,7 @@ describe("/provider models", () => {
 				compat: { custom: true },
 			});
 			assert.equal(saved.providers.relay.models[1].api, "openai-completions");
+			assert.equal(saved.providers.relay.models[1].contextWindow, 32768);
 			assert.deepEqual(notifications, ["Added 1 model(s) on relay"]);
 		} finally {
 			globalThis.fetch = previousFetch;

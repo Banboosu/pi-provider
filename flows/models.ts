@@ -11,7 +11,7 @@ import {
 import { getModelsPath, readModelsFile, upsertProvider, writeModelsFile } from "../lib/models-json.ts";
 import { enrichModelEntry } from "../lib/official-catalog.ts";
 import { type MenuNote, rowMenu } from "../lib/row-menu.ts";
-import type { ModelEntry, ProviderApi, ProviderConfig } from "../lib/types.ts";
+import type { ListedModel, ModelEntry, ProviderApi, ProviderConfig } from "../lib/types.ts";
 import {
 	type Env,
 	enrichModels,
@@ -19,6 +19,7 @@ import {
 	idLines,
 	inferProviderApi,
 	jsoncNotes,
+	metadataSource,
 	modelMeta,
 	modelsKnownToProvider,
 	type Notice,
@@ -144,7 +145,7 @@ export async function manageModels(env: Env, providerId: string): Promise<Notice
 	}
 
 	const notes: string[] = [];
-	let listed: Array<{ id: string; name?: string }> = [];
+	let listed: ListedModel[] = [];
 	let relayListed = false;
 	if (canDiscover) {
 		// models.json may have changed since the registry was last loaded; the
@@ -179,13 +180,13 @@ export async function manageModels(env: Env, providerId: string): Promise<Notice
 			return { id, label: id, detail: `${name}${modelMeta(entry)}${gone}`, checked: true };
 		}),
 		...candidates.map((m) => {
-			const enriched = enrichModelEntry(catalog, m.id, api, m.name);
+			const enriched = enrichModelEntry(catalog, m.id, api, m.name, m);
 			const source = enriched.status === "matched" ? "" : " · no catalog match";
 			return {
 				id: m.id,
 				label: m.id,
 				detail: `new · ${modelMeta(enriched.entry)}${source}`,
-				description: enriched.matched ? `metadata from ${enriched.matched}` : "metadata: defaults (128k context)",
+				description: metadataSource(enriched, m),
 				checked: false,
 			};
 		}),

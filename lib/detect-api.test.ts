@@ -54,6 +54,78 @@ describe("listOpenAIModels", () => {
 		assert.equal(calls[0]!.headers["x-api-key"], "header-key");
 		assert.equal(calls[0]!.headers["x-relay-scope"], "models");
 	});
+
+	// Entry shapes as the servers build them: vLLM's ModelCard
+	// (vllm/entrypoints/serve/engine/protocol.py; SGLang's is the same),
+	// llama.cpp's single-model and router lists (tools/server/server-context.cpp,
+	// server-models.cpp) and new-api's OpenAIModels (relaykit/dto/pricing.go).
+	it("reads the context window and image input local servers report", async () => {
+		mockFetch(() => ({
+			status: 200,
+			body: {
+				object: "list",
+				data: [
+					{
+						id: "Qwen/Qwen3-8B", object: "model", created: 1, owned_by: "vllm",
+						root: "Qwen/Qwen3-8B", parent: null, max_model_len: 32768, permission: [],
+					},
+					{
+						id: "gemma-3-12b-it", aliases: [], tags: [], object: "model",
+						architecture: { input_modalities: ["text", "image"], output_modalities: ["text"] },
+						created: 1, owned_by: "llamacpp",
+						meta: { vocab_type: 1, n_vocab: 262144, n_ctx: 16384, n_ctx_train: 131072 },
+					},
+					{
+						id: "qwen3-8b", aliases: [], tags: [], object: "model", owned_by: "llamacpp", created: 1,
+						status: { value: "loaded", args: ["--ctx-size", "16384"] },
+						architecture: { input_modalities: ["text"], output_modalities: ["text"] },
+						source: "cache", can_remove: true, context_length: 40960,
+					},
+					{
+						id: "gpt-6-sol", object: "model", created: 1626777600, owned_by: "openai",
+						supported_endpoint_types: ["openai"],
+					},
+				],
+			},
+		}));
+
+		const result = await listOpenAIModels({ baseUrl: "http://localhost:8000/v1" });
+
+		assert.deepEqual(result.models, [
+			{ id: "Qwen/Qwen3-8B", name: undefined, contextWindow: 32768 },
+			// The per-slot runtime context, not the training context.
+			{ id: "gemma-3-12b-it", name: undefined, contextWindow: 16384, input: ["text", "image"] },
+			{ id: "qwen3-8b", name: undefined, contextWindow: 40960 },
+			{ id: "gpt-6-sol", name: undefined },
+		]);
+	});
+
+	it("drops context windows that aren't positive whole numbers", async () => {
+		mockFetch(() => ({
+			status: 200,
+			body: {
+				data: [
+					{ id: "zero", max_model_len: 0 },
+					{ id: "negative", meta: { n_ctx: -1 } },
+					{ id: "string", context_length: "32768" },
+					{ id: "fraction", context_length: 1.5 },
+					{ id: "falls-through", max_model_len: null, meta: null, context_length: 8192 },
+					{ id: "odd-shapes", meta: "n_ctx", architecture: { input_modalities: "image" } },
+				],
+			},
+		}));
+
+		const result = await listOpenAIModels({ baseUrl: "http://localhost:8000/v1" });
+
+		assert.deepEqual(result.models, [
+			{ id: "zero", name: undefined },
+			{ id: "negative", name: undefined },
+			{ id: "string", name: undefined },
+			{ id: "fraction", name: undefined },
+			{ id: "falls-through", name: undefined, contextWindow: 8192 },
+			{ id: "odd-shapes", name: undefined },
+		]);
+	});
 });
 
 describe("chatPing", () => {

@@ -8,12 +8,20 @@ import {
 } from "../lib/models-json.ts";
 import {
 	catalogFromRegistry,
+	type EnrichResult,
 	enrichModelEntry,
 	formatCtx,
 	type OfficialModelMeta,
 } from "../lib/official-catalog.ts";
 import type { MenuNote, Tone } from "../lib/row-menu.ts";
-import { API_OPTIONS, type ModelEntry, type ModelsFile, type ProviderApi, type ProviderConfig } from "../lib/types.ts";
+import {
+	API_OPTIONS,
+	type ListedModel,
+	type ModelEntry,
+	type ModelsFile,
+	type ProviderApi,
+	type ProviderConfig,
+} from "../lib/types.ts";
 
 /** Everything a flow needs: the command context plus the extension API (for setModel). */
 export interface Env {
@@ -344,16 +352,27 @@ export interface EnrichedModels {
 
 export function enrichModels(
 	catalog: OfficialModelMeta[],
-	ids: Array<{ id: string; name?: string }>,
+	ids: ListedModel[],
 	api: ProviderApi | undefined,
 ): EnrichedModels {
 	let matched = 0;
 	const entries = ids.map((model) => {
-		const result = enrichModelEntry(catalog, model.id, api, model.name);
+		const result = enrichModelEntry(catalog, model.id, api, model.name, model);
 		if (result.status === "matched") matched++;
 		return result.entry;
 	});
 	return { entries, matched };
+}
+
+/** Where a new model's metadata comes from, for its checklist row. */
+export function metadataSource(result: EnrichResult, reported: Pick<ListedModel, "contextWindow" | "input">): string {
+	if (result.matched) return `metadata from ${result.matched}`;
+	const parts = [
+		reported.contextWindow ? `${formatCtx(reported.contextWindow)} context` : undefined,
+		reported.input ? "image input" : undefined,
+	].filter(Boolean);
+	if (parts.length === 0) return "metadata: defaults (128k context)";
+	return `metadata: ${parts.join(", ")} reported by the server${reported.contextWindow ? "" : " · defaults (128k context)"}`;
 }
 
 /** `200k · think` — compact metadata for a checklist row. */

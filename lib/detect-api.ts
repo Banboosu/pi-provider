@@ -1,4 +1,4 @@
-import type { ModelEntry, ProviderApi } from "./types.ts";
+import type { ListedModel, ModelEntry, ProviderApi } from "./types.ts";
 
 function stripTrailingSlash(url: string): string {
 	return url.replace(/\/+$/, "");
@@ -66,17 +66,40 @@ async function tryFetchJson(
 	}
 }
 
-function parseOpenAIModels(json: unknown): Array<{ id: string; name?: string }> {
+/** A positive whole token count; anything else (0, -1, 1.5, "32768") is dropped. */
+function tokenCount(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
+/**
+ * Parse an OpenAI-style `{ data: [{ id }] }` model list.
+ *
+ * Local servers also report a context window there, which matters for models
+ * the official catalog doesn't know: vLLM and SGLang send `max_model_len`,
+ * llama.cpp sends the per-slot `meta.n_ctx` and, in router mode,
+ * `context_length` (the training context, so only an upper bound). Runtime
+ * values come first. llama.cpp and OpenRouter also list
+ * `architecture.input_modalities`. new-api/one-api relays send none of these.
+ */
+function parseOpenAIModels(json: unknown): ListedModel[] {
 	if (!json || typeof json !== "object") return [];
 	const data = (json as { data?: unknown }).data;
 	if (!Array.isArray(data)) return [];
-	const out: Array<{ id: string; name?: string }> = [];
+	const out: ListedModel[] = [];
 	for (const item of data) {
 		if (!item || typeof item !== "object") continue;
-		const id = (item as { id?: unknown }).id;
+		const { id, name, max_model_len, meta, context_length, architecture } = item as Record<string, unknown>;
 		if (typeof id !== "string" || !id) continue;
-		const name = (item as { name?: unknown }).name;
-		out.push({ id, name: typeof name === "string" ? name : undefined });
+		const contextWindow =
+			tokenCount(max_model_len) ?? tokenCount((meta as { n_ctx?: unknown } | null)?.n_ctx) ?? tokenCount(context_length);
+		const modalities = (architecture as { input_modalities?: unknown } | null)?.input_modalities;
+		const image = Array.isArray(modalities) && modalities.includes("image");
+		out.push({
+			id,
+			name: typeof name === "string" ? name : undefined,
+			...(contextWindow ? { contextWindow } : {}),
+			...(image ? { input: ["text", "image"] } : {}),
+		});
 	}
 	return out;
 }
@@ -124,7 +147,7 @@ export async function listOpenAIModels(options: {
 	headers?: Record<string, string | null>;
 	signal?: AbortSignal;
 }): Promise<{
-	models: Array<{ id: string; name?: string }>;
+	models: ListedModel[];
 	tried: string[];
 	matchedUrl?: string;
 	error?: string;
@@ -371,7 +394,7 @@ export async function chatPing(options: {
 	return { ok: false, status: last?.status ?? 0, url: last?.url ?? urls[0]!, detail: last?.detail ?? "unreachable" };
 }
 
-export function toModelEntries(discovered: Array<{ id: string; name?: string }>): ModelEntry[] {
+export function toModelEntries(discovered: ListedModel[]): ModelEntry[] {
 	return discovered.map((m) => ({
 		id: m.id,
 		...(m.name && m.name !== m.id ? { name: m.name } : {}),

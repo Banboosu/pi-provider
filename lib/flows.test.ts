@@ -222,6 +222,56 @@ describe("/provider add (TUI)", () => {
 		assert.deepEqual(switched, ["relay-one/gpt-4o"]);
 		assert.deepEqual(notifications, ["Saved relay-one with 2 model(s) · Now using relay-one/gpt-4o"]);
 	});
+
+	it("saves the context window and image input a local server reports", async () => {
+		globalThis.fetch = (async (input: string | URL | Request) => {
+			if (!String(input).endsWith("/models")) return new Response("not found", { status: 404 });
+			return Response.json({
+				data: [{
+					id: "gemma-3-12b-it", object: "model", owned_by: "llamacpp",
+					architecture: { input_modalities: ["text", "image"], output_modalities: ["text"] },
+					meta: { n_ctx: 16384, n_ctx_train: 131072 },
+				}],
+			});
+		}) as typeof fetch;
+		const { registry } = fakeRegistry(() => ({}));
+
+		await runCommand(
+			"add",
+			[
+				(s) => {
+					s.type("http://localhost:8080/v1");
+					s.press(KEY.enter);
+				},
+				(s) => {
+					s.type("sk-local1234");
+					s.press(KEY.enter);
+				},
+				(s) => s.press(KEY.enter),
+				(s) => {
+					const text = flat(s.text());
+					assert.ok(text.includes("metadata: 16k context, image input reported by the server"), text);
+					s.press(KEY.space, KEY.enter);
+				},
+				(s) => s.press(KEY.enter),
+				async (s) => {
+					await s.waitFor("run again");
+					s.press(KEY.esc);
+				},
+			],
+			registry,
+		);
+
+		const [saved] = Object.values(savedProviders());
+		assert.deepEqual(saved!.models, [{
+			id: "gemma-3-12b-it",
+			reasoning: false,
+			input: ["text", "image"],
+			contextWindow: 16384,
+			maxTokens: 16384,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		}]);
+	});
 });
 
 describe("provider ids pi already has (TUI)", () => {

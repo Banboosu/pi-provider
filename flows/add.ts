@@ -4,7 +4,7 @@ import { loopEditor, loopSelect, runWizard, type StepOutcome, type WizardStep, w
 import { listProviderIds, readModelsFile, sanitizeProviderId, upsertProvider, writeModelsFile } from "../lib/models-json.ts";
 import { enrichModelEntry } from "../lib/official-catalog.ts";
 import { type MenuNote, rowMenu } from "../lib/row-menu.ts";
-import { API_LABELS, type ProviderApi, type ProviderConfig } from "../lib/types.ts";
+import { API_LABELS, type ListedModel, type ProviderApi, type ProviderConfig } from "../lib/types.ts";
 import { promptApiKey, promptBaseUrl, promptDisplayName, promptProtocol, promptProviderId } from "./fields.ts";
 import { parseModelIds } from "./models.ts";
 import {
@@ -17,6 +17,7 @@ import {
 	errorText,
 	isReservedProviderId,
 	jsoncNotes,
+	metadataSource,
 	modelMeta,
 	type Notice,
 	officialCatalog,
@@ -92,7 +93,7 @@ export function suggestProviderId(baseUrl: string, taken: Iterable<string>): str
 interface Listing {
 	/** baseUrl + key the listing was fetched with; a change refetches. */
 	forKey: string;
-	models: Array<{ id: string; name?: string }>;
+	models: ListedModel[];
 	error?: string;
 }
 
@@ -157,16 +158,16 @@ async function modelsStep(env: Env, draft: Draft): Promise<StepOutcome> {
 	const catalog = officialCatalog(ctx, data);
 	const listed = new Set(listing.models.map((m) => m.id));
 	// Keep ids chosen earlier (e.g. typed before the base URL changed) visible.
-	const extra = draft.selected.filter((id) => !listed.has(id)).map((id) => ({ id, name: undefined }));
+	const extra: ListedModel[] = draft.selected.filter((id) => !listed.has(id)).map((id) => ({ id }));
 	const selected = new Set(draft.selected);
 	const items: CheckboxItem[] = [...listing.models, ...extra].map((m) => {
-		const r = enrichModelEntry(catalog, m.id, draft.api, m.name);
+		const r = enrichModelEntry(catalog, m.id, draft.api, m.name, m);
 		const origin = listed.has(m.id) ? "" : " · not listed by relay";
 		return {
 			id: m.id,
 			label: m.id,
 			detail: `${modelMeta(r.entry)}${r.status === "matched" ? "" : " · no catalog match"}${origin}`,
-			description: r.matched ? `metadata from ${r.matched}` : "metadata: defaults (128k context)",
+			description: metadataSource(r, m),
 			checked: selected.has(m.id),
 		};
 	});
@@ -179,10 +180,10 @@ async function modelsStep(env: Env, draft: Draft): Promise<StepOutcome> {
 }
 
 function buildConfig(env: Env, draft: Draft): { config: ProviderConfig; matched: number } {
-	const names = new Map((draft.listing?.models ?? []).map((m) => [m.id, m.name]));
+	const listed = new Map((draft.listing?.models ?? []).map((m) => [m.id, m]));
 	const { entries, matched } = enrichModels(
 		officialCatalog(env.ctx, readModelsFile()),
-		draft.selected.map((id) => ({ id, name: names.get(id) })),
+		draft.selected.map((id) => listed.get(id) ?? { id }),
 		draft.api,
 	);
 	return {
